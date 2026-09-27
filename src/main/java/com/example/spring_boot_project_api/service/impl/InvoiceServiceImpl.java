@@ -15,20 +15,25 @@ import com.example.spring_boot_project_api.dto.request.invoice.InvoicePaymentMet
 import com.example.spring_boot_project_api.dto.request.invoice.InvoiceRequestDTO;
 import com.example.spring_boot_project_api.dto.request.notification.NotificationRequestDTO;
 import com.example.spring_boot_project_api.dto.response.invoice.InvoiceResponseDTO;
+import com.example.spring_boot_project_api.enums.AuthProviderEnum;
 import com.example.spring_boot_project_api.enums.InvoiceStatusEnum;
 import com.example.spring_boot_project_api.enums.NotificationTypeEnum;
 import com.example.spring_boot_project_api.enums.PaymentMethodEnum;
+import com.example.spring_boot_project_api.enums.ReservationStatusEnum;
 import com.example.spring_boot_project_api.enums.RoleEnum;
 import com.example.spring_boot_project_api.model.Invoice;
 import com.example.spring_boot_project_api.model.Rental;
+import com.example.spring_boot_project_api.model.Reservation;
 import com.example.spring_boot_project_api.model.User;
 import com.example.spring_boot_project_api.repository.InvoiceRepository;
 import com.example.spring_boot_project_api.repository.RentalRepository;
+import com.example.spring_boot_project_api.repository.ReservationRepository;
 import com.example.spring_boot_project_api.repository.UserRepository;
 import com.example.spring_boot_project_api.service.BakongService;
 import com.example.spring_boot_project_api.service.InvoicePdfService;
 import com.example.spring_boot_project_api.service.InvoiceService;
 import com.example.spring_boot_project_api.service.NotificationService;
+import com.example.spring_boot_project_api.service.TelegramService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -38,9 +43,13 @@ public class InvoiceServiceImpl implements InvoiceService {
   private final InvoiceRepository invoiceRepository;
   private final UserRepository userRepository;
   private final RentalRepository rentalRepository;
+  // ⬇ needed to cascade PENDING -> CONFIRMED onto the Reservation once
+  // its Rental's invoice is paid. See syncRentalReservationOnPaid() below.
+  private final ReservationRepository reservationRepository;
   private final BakongService bakongService;
   private final NotificationService notificationService;
   private final InvoicePdfService invoicePdfService;
+  private final TelegramService telegramService;
 
   @Override
   public InvoiceResponseDTO createInvoice(InvoiceRequestDTO dto) {
@@ -58,7 +67,6 @@ public class InvoiceServiceImpl implements InvoiceService {
     BigDecimal additionalServices = dto.getAdditionalServicesTotal() != null ? dto.getAdditionalServicesTotal()
         : BigDecimal.ZERO;
 
-    // FIX: additionalServices was missing from the total.
     BigDecimal totalAmount = subtotal.add(additionalServices).subtract(discount).add(tax).add(lateFee);
 
     Invoice invoice = new Invoice();
@@ -88,8 +96,7 @@ public class InvoiceServiceImpl implements InvoiceService {
   @Override
   public List<InvoiceResponseDTO> getMyInvoices() {
     User currentUser = getCurrentUser();
-    return invoiceRepository.findByRentalUserEmail(currentUser.getEmail()) // find thru Rental -> User to get who's
-                                                                           // invoices it is
+    return invoiceRepository.findByRentalUserEmail(currentUser.getEmail())
         .stream()
         .map(this::toResponse)
         .toList();
@@ -115,7 +122,6 @@ public class InvoiceServiceImpl implements InvoiceService {
     BigDecimal additionalServices = dto.getAdditionalServicesTotal() != null ? dto.getAdditionalServicesTotal()
         : BigDecimal.ZERO;
 
-    // FIX: additionalServices was missing from the total.
     BigDecimal totalAmount = subtotal.add(additionalServices).subtract(discount).add(tax).add(lateFee);
 
     invoice.setRental(rental);
@@ -130,6 +136,16 @@ public class InvoiceServiceImpl implements InvoiceService {
     invoice.setPaymentMethod(dto.getPaymentMethod() != null ? dto.getPaymentMethod() : PaymentMethodEnum.KHQR);
 
     Invoice saved = invoiceRepository.save(invoice);
+
+    // The admin "Invoices" table lets staff flip status via a plain dropdown
+    // (InvoiceManagement.vue's onStatusChange -> invoiceService.update() for
+    // anything other than newStatus === 'PAID'). If staff pick PAID through
+    // THIS path rather than the dedicated markPaid endpoint, still cascade
+    // the same PENDING -> CONFIRMED sync so both paths behave consistently.
+    if (saved.getStatus() == InvoiceStatusEnum.PAID) {
+      syncRentalReservationOnPaid(saved);
+    }
+
     return toResponse(saved);
   }
 
@@ -181,13 +197,25 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     invoice.setStatus(InvoiceStatusEnum.PAID);
+    // ⬇ FIXED: this path (customer pays via Bakong QR) never set paidAt,
+    // so a Bakong-confirmed invoice kept paidAt = null forever even though
+    // status was PAID — unlike markPaid() (staff/cash), which always set
+    // it. Any report or PDF that sorts/reads paidAt was silently wrong for
+    // every Bakong payment. Set it here so both payment paths agree.
+    invoice.setPaidAt(LocalDateTime.now());
     Invoice saved = invoiceRepository.save(invoice);
+
+    // customer paid via Bakong QR — same downstream effect as staff
+    // marking it paid by hand, so cascade the same PENDING -> CONFIRMED sync.
+    syncRentalReservationOnPaid(saved);
 
     NotificationRequestDTO notification = new NotificationRequestDTO();
     notification.setType(NotificationTypeEnum.PAYMENT_SUCCESS);
     notification.setTitle("Payment successful");
     notification.setMessage("Your payment for invoice " + saved.getInvoiceNumber() + " was received. Thank you!");
     notificationService.createNotification(currentUser.getId(), notification);
+
+    sendInvoiceToTelegram(saved, currentUser, "✅ Payment received — here is your invoice.");
 
     return toResponse(saved);
   }
@@ -213,8 +241,6 @@ public class InvoiceServiceImpl implements InvoiceService {
       throw new RuntimeException("This invoice has been cancelled");
     }
 
-    // Choosing CASH records intent only: the invoice stays UNPAID until a
-    // staff/admin member marks it PAID at pickup. KHQR keeps the QR flow.
     invoice.setPaymentMethod(dto.paymentMethod());
     if (dto.paymentMethod() == PaymentMethodEnum.CASH) {
       invoice.setPaidAt(null);
@@ -224,6 +250,9 @@ public class InvoiceServiceImpl implements InvoiceService {
     return toResponse(saved);
   }
 
+  // Sends the Telegram invoice for ANY manually-confirmed payment, not just
+  // CASH. A KHQR invoice marked paid by hand (e.g. while Bakong auto-confirm
+  // isn't wired up for it) still notifies the customer on Telegram.
   @Override
   @Transactional
   public InvoiceResponseDTO markPaid(Long id) {
@@ -241,18 +270,58 @@ public class InvoiceServiceImpl implements InvoiceService {
     invoice.setPaidAt(LocalDateTime.now());
     Invoice saved = invoiceRepository.save(invoice);
 
-    // CASH payments were never confirmed online — notify the customer that
-    // their in-person payment has been recorded.
-    if (saved.getPaymentMethod() == PaymentMethodEnum.CASH) {
-      User customer = saved.getRental().getUser();
-      NotificationRequestDTO notification = new NotificationRequestDTO();
-      notification.setType(NotificationTypeEnum.PAYMENT_SUCCESS);
-      notification.setTitle("Cash payment recorded");
-      notification.setMessage("Your cash payment for invoice " + saved.getInvoiceNumber() + " has been recorded. Thank you!");
-      notificationService.createNotification(customer.getId(), notification);
-    }
+    // staff marked this paid by hand — cascade PENDING -> CONFIRMED
+    // onto the Rental's Reservation. See syncRentalReservationOnPaid.
+    syncRentalReservationOnPaid(saved);
+
+    User customer = saved.getRental().getUser();
+    NotificationRequestDTO notification = new NotificationRequestDTO();
+    notification.setType(NotificationTypeEnum.PAYMENT_SUCCESS);
+    notification.setTitle("Payment recorded");
+    notification.setMessage("Your payment for invoice " + saved.getInvoiceNumber() + " has been recorded. Thank you!");
+    notificationService.createNotification(customer.getId(), notification);
+
+    // Send Telegram invoice regardless of payment method (CASH or a
+    // manually-verified KHQR payment) whenever staff mark an invoice paid.
+    sendInvoiceToTelegram(saved, customer, "✅ Payment recorded — here is your invoice.");
 
     return toResponse(saved);
+  }
+
+  // Cascades a PAID invoice onto its Reservation (through the invoice's
+  // Rental) — but ONLY moves it from PENDING to CONFIRMED.
+  //
+  // Deliberately Reservation-only. We do NOT touch Rental.status here:
+  // Rental's states (PICKED_UP, ACTIVE, RETURNED, COMPLETED) represent
+  // physical handover events a staff member confirms by hand at the
+  // counter — a payment landing tells us nothing about whether the car has
+  // actually been picked up. RentalStatusEnum.CONFIRMED is explicitly
+  // documented as unused in practice, precisely because Rental is only
+  // ever created from an already-CONFIRMED Reservation — so setting it here
+  // would just introduce a status value nothing else expects.
+  //
+  // Reservation, on the other hand, represents booking *commitment* —
+  // payment landing IS strong evidence the booking is real, not tentative,
+  // so PENDING -> CONFIRMED makes sense there.
+  //
+  // Deliberately narrow even for Reservation: we never touch one that's
+  // already past PENDING (CONFIRMED or CANCELLED) — a paid-but-cancelled
+  // reservation still needs a human decision (refund?), not a silent flip.
+  //
+  // Called from every path that can set an invoice to PAID: markPaid(),
+  // confirmPayment() (Bakong), and updateInvoice() when staff pick PAID
+  // through the plain status dropdown instead of the dedicated endpoint.
+  private void syncRentalReservationOnPaid(Invoice invoice) {
+    Rental rental = invoice.getRental();
+    if (rental == null) {
+      return;
+    }
+
+    Reservation reservation = rental.getReservation();
+    if (reservation != null && reservation.getStatus() == ReservationStatusEnum.PENDING) {
+      reservation.setStatus(ReservationStatusEnum.CONFIRMED);
+      reservationRepository.save(reservation);
+    }
   }
 
   @Override
@@ -261,6 +330,13 @@ public class InvoiceServiceImpl implements InvoiceService {
         .orElseThrow(() -> new RuntimeException("Invoice not found"));
     assertCanView(invoice);
     return invoicePdfService.generate(invoice);
+  }
+
+  private void sendInvoiceToTelegram(Invoice invoice, User customer, String caption) {
+    if (customer.getAuthProvider() == AuthProviderEnum.TELEGRAM && customer.getProviderId() != null) {
+      byte[] pdf = invoicePdfService.generate(invoice);
+      telegramService.sendDocument(customer.getProviderId(), pdf, invoice.getInvoiceNumber() + ".pdf", caption);
+    }
   }
 
   private void assertCanView(Invoice invoice) {
@@ -273,7 +349,6 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
   }
 
-  // Generate Invoice Number
   private String generateInvoiceNumber() {
     String datePart = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
     String invoiceNum;
@@ -284,7 +359,6 @@ public class InvoiceServiceImpl implements InvoiceService {
     return invoiceNum;
   }
 
-  // Ownership function
   private User getCurrentUser() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     String currentUsername = authentication.getName();

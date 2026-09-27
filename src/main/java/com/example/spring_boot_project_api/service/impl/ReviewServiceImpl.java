@@ -1,14 +1,18 @@
 package com.example.spring_boot_project_api.service.impl;
 
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.example.spring_boot_project_api.dto.request.notification.NotificationRequestDTO;
 import com.example.spring_boot_project_api.dto.request.review.ReviewRequestDTO;
 import com.example.spring_boot_project_api.dto.request.review.ReviewVisibilityRequestDTO;
 import com.example.spring_boot_project_api.dto.response.review.ReviewResponseDTO;
+import com.example.spring_boot_project_api.enums.NotificationTypeEnum;
 import com.example.spring_boot_project_api.enums.RentalStatusEnum;
 import com.example.spring_boot_project_api.enums.RoleEnum;
 import com.example.spring_boot_project_api.model.Rental;
@@ -17,7 +21,7 @@ import com.example.spring_boot_project_api.model.User;
 import com.example.spring_boot_project_api.repository.RentalRepository;
 import com.example.spring_boot_project_api.repository.ReviewRepository;
 import com.example.spring_boot_project_api.repository.UserRepository;
-
+import com.example.spring_boot_project_api.service.NotificationService;
 import com.example.spring_boot_project_api.service.ReviewService;
 
 import lombok.RequiredArgsConstructor;
@@ -28,6 +32,7 @@ public class ReviewServiceImpl implements ReviewService {
   private final ReviewRepository reviewRepository;
   private final RentalRepository rentalRepository;
   private final UserRepository userRepository;
+  private final NotificationService notificationService; // ⬅ NEW
 
   @Override
   public ReviewResponseDTO createReview(ReviewRequestDTO dto) {
@@ -58,7 +63,30 @@ public class ReviewServiceImpl implements ReviewService {
     review.setComment(dto.getComment());
 
     Review saved = reviewRepository.save(review);
+
+    // ⬅ NEW: notify every admin/manager/staff that a new review came in
+    notifyStaffOfNewReview(saved, currentUser);
+
     return toResponse(saved);
+  }
+
+  // ⬅ NEW
+  private void notifyStaffOfNewReview(Review review, User author) {
+    String authorName = (author.getFirstName() + " " + author.getLastName()).trim();
+    String vehicleLabel = review.getVehicle().getBrand() != null
+        ? review.getVehicle().getBrand().getName() + " " + review.getVehicle().getModel()
+        : review.getVehicle().getModel();
+
+    NotificationRequestDTO notification = new NotificationRequestDTO();
+    notification.setType(NotificationTypeEnum.NEW_REVIEW);
+    notification.setTitle("New review received");
+    notification.setMessage(
+        authorName + " left a " + review.getRating() + "★ review for " + vehicleLabel + ".");
+
+    List<User> staff = userRepository.findByRoleIn(List.of(RoleEnum.ADMIN, RoleEnum.MANAGER, RoleEnum.STAFF));
+    for (User recipient : staff) {
+      notificationService.createNotification(recipient.getId(), notification);
+    }
   }
 
   @Override

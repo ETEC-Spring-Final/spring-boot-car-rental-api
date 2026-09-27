@@ -98,6 +98,19 @@ public class User {
   @Column(name = "provider_id", length = 100)
   private String providerId;
 
+  // ===== Telegram notifications (independent of login method) =====
+  // Lets ANY account (LOCAL/GOOGLE/FACEBOOK/TELEGRAM) receive Telegram
+  // messages + invoice PDFs once linked, regardless of which provider the
+  // user actually logs in with. Populated two ways:
+  //   1) automatically for accounts created THROUGH Telegram login
+  //      (TelegramAuthService sets it = providerId)
+  //   2) via POST /api/user-profiles/me/connect-telegram for everyone else
+  //      (TelegramLinkController)
+  // Null means "not linked to Telegram" — notification/invoice code checks
+  // this field, not authProvider, before sending anything to Telegram.
+  @Column(name = "telegram_chat_id", length = 100)
+  private String telegramChatId;
+
   @CreationTimestamp
   @Column(name = "created_at", updatable = false)
   private LocalDateTime createdAt;

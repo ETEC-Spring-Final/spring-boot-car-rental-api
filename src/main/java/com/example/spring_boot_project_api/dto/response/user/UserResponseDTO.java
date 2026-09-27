@@ -24,6 +24,7 @@ public class UserResponseDTO {
   private String profilePicture;
   private Boolean active;
   private String authProvider;
+  private Boolean isTelegramConnected; // ⬅ NEW — never expose the raw telegramChatId, only whether it's linked
   private LocalDateTime createdAt;
   private LocalDateTime updatedAt;
 }

@@ -1,17 +1,20 @@
 package com.example.spring_boot_project_api.service.impl;
 
+import java.util.Comparator; // ⬅ NEW
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 
 import com.example.spring_boot_project_api.dto.request.notification.NotificationRequestDTO;
 import com.example.spring_boot_project_api.dto.response.notification.NotificationResponseDTO;
+import com.example.spring_boot_project_api.enums.AuthProviderEnum; // ⬅ NEW
 import com.example.spring_boot_project_api.enums.RoleEnum;
 import com.example.spring_boot_project_api.model.Notification;
 import com.example.spring_boot_project_api.model.User;
 import com.example.spring_boot_project_api.repository.NotificationRepository;
 import com.example.spring_boot_project_api.repository.UserRepository;
 import com.example.spring_boot_project_api.service.NotificationService;
+import com.example.spring_boot_project_api.service.TelegramService; // ⬅ NEW
 
 import lombok.RequiredArgsConstructor;
 
@@ -20,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 public class NotificationServiceImpl implements NotificationService {
   private final NotificationRepository notificationRepository;
   private final UserRepository userRepository;
+  private final TelegramService telegramService; // ⬅ NEW
 
   @Override
   public NotificationResponseDTO createNotification(Long userId, NotificationRequestDTO dto) {
@@ -32,6 +36,13 @@ public class NotificationServiceImpl implements NotificationService {
     notification.setMessage(dto.getMessage());
 
     Notification saved = notificationRepository.save(notification);
+
+    // ⬅ NEW: forward to Telegram if this user logged in via Telegram
+    if (user.getAuthProvider() == AuthProviderEnum.TELEGRAM && user.getProviderId() != null) {
+      String text = "<b>" + dto.getTitle() + "</b>\n" + dto.getMessage();
+      telegramService.sendMessage(user.getProviderId(), text);
+    }
+
     return toResponse(saved);
   }
 
@@ -45,6 +56,7 @@ public class NotificationServiceImpl implements NotificationService {
   @Override
   public List<NotificationResponseDTO> getAllNotifications() {
     return notificationRepository.findAll().stream()
+        .sorted(Comparator.comparing(Notification::getCreatedAt).reversed()) // ⬅ NEW: newest first
         .map(this::toResponse)
         .toList();
   }

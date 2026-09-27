@@ -10,4 +10,5 @@ public enum NotificationTypeEnum {
   RETURN_REMINDER,
   LATE_RETURN,
   PROMOTION,
+  NEW_REVIEW, // ⬅ NEW — staff notification when a customer submits a review
 }

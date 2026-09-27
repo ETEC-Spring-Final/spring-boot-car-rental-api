@@ -14,14 +14,14 @@ import com.example.spring_boot_project_api.dto.request.user.RegisterRequestDTO;
 import com.example.spring_boot_project_api.dto.request.user.UpdateProfileRequestDTO;
 import com.example.spring_boot_project_api.dto.response.user.AuthResponseDTO;
 import com.example.spring_boot_project_api.dto.response.user.UserResponseDTO;
+import com.example.spring_boot_project_api.enums.AuditActionEnum;
 import com.example.spring_boot_project_api.enums.AuthProviderEnum;
 import com.example.spring_boot_project_api.enums.RoleEnum;
 import com.example.spring_boot_project_api.model.User;
 import com.example.spring_boot_project_api.repository.UserRepository;
-import com.example.spring_boot_project_api.service.LoginHistoryService;
 import com.example.spring_boot_project_api.service.AuditLogService;
+import com.example.spring_boot_project_api.service.LoginHistoryService;
 import com.example.spring_boot_project_api.service.UserService;
-import com.example.spring_boot_project_api.enums.AuditActionEnum;
 import com.example.spring_boot_project_api.util.AuditLogContext;
 import com.example.spring_boot_project_api.util.JwtUtil;
 
@@ -197,6 +197,7 @@ public class UserServiceImpl implements UserService {
         .profilePicture(user.getProfilePicture())
         .active(user.getActive())
         .authProvider(user.getAuthProvider() != null ? user.getAuthProvider().name() : null)
+        .isTelegramConnected(user.getTelegramChatId() != null) // ⬅ NEW
         .createdAt(user.getCreatedAt())
         .updatedAt(user.getUpdatedAt())
         .build();

@@ -1,5 +1,21 @@
 package com.example.spring_boot_project_api.service.impl;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+
+import com.example.spring_boot_project_api.dto.request.bakong.BakongRequest;
+import com.example.spring_boot_project_api.dto.request.bakong.CheckTransactionRequest;
+import com.example.spring_boot_project_api.dto.response.bakong.BakongResponse;
+import com.example.spring_boot_project_api.service.BakongService;
+import com.example.spring_boot_project_api.service.BakongTokenService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
@@ -8,27 +24,14 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
-import com.example.spring_boot_project_api.dto.request.bakong.BakongRequest;
-import com.example.spring_boot_project_api.dto.response.bakong.BakongResponse;
-import com.example.spring_boot_project_api.service.BakongService;
-import com.example.spring_boot_project_api.service.BakongTokenService;
-import com.example.spring_boot_project_api.dto.request.bakong.CheckTransactionRequest;
+
 import kh.gov.nbc.bakong_khqr.BakongKHQR;
+import kh.gov.nbc.bakong_khqr.model.IndividualInfo;
 import kh.gov.nbc.bakong_khqr.model.KHQRCurrency;
 import kh.gov.nbc.bakong_khqr.model.KHQRData;
 import kh.gov.nbc.bakong_khqr.model.KHQRResponse;
-import kh.gov.nbc.bakong_khqr.model.IndividualInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-
-import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -139,14 +142,26 @@ public class BakongServiceImpl implements BakongService {
 
     String url = baseUrl.replaceAll("/+$", "") + "/v1/check_transaction_by_md5";
 
-    String responseBody = restClient.post()
-        .uri(url)
-        .contentType(MediaType.APPLICATION_JSON)
-        .accept(MediaType.APPLICATION_JSON)
-        .header(HttpHeaders.AUTHORIZATION, "Bearer " + bearerToken)
-        .body(Map.of("md5", request.md5()))
-        .retrieve()
-        .body(String.class);
+    String responseBody;
+    try {
+      responseBody = restClient.post()
+          .uri(url)
+          .contentType(MediaType.APPLICATION_JSON)
+          .accept(MediaType.APPLICATION_JSON)
+          .header(HttpHeaders.AUTHORIZATION, "Bearer " + bearerToken)
+          .body(Map.of("md5", request.md5()))
+          .retrieve()
+          .onStatus(status -> status.value() >= 400, (req, res) -> {
+            String errorBody = new String(res.getBody().readAllBytes(), StandardCharsets.UTF_8);
+            log.error("Bakong check_transaction_by_md5 FAILED — status: {}, body: {}, md5 sent: {}",
+                res.getStatusCode(), errorBody, request.md5());
+          })
+          .body(String.class);
+    } catch (Exception e) {
+      log.error("Bakong check_transaction_by_md5 threw exception — type: {}, message: {}",
+          e.getClass().getName(), e.getMessage(), e);
+      throw e;
+    }
 
     log.info("Data response from Bakong API: {}", responseBody);
 

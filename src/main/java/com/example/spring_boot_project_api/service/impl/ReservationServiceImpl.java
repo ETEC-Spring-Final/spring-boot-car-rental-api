@@ -175,6 +175,12 @@ public class ReservationServiceImpl implements ReservationService {
       notification.setTitle("Booking created");
       notification.setMessage("Your booking request has been received. Please complete your payment.");
       notificationService.createNotification(currentUser.getId(), notification);
+
+      // ⬅ NEW: also notify every admin/manager/staff account of the new booking
+      notifyStaff(
+          "New booking request",
+          currentUser.getFirstName() + " " + currentUser.getLastName()
+              + " (" + currentUser.getEmail() + ") just made a new booking. Please review.");
     }
 
     return toResponse(saved);
@@ -232,6 +238,12 @@ public class ReservationServiceImpl implements ReservationService {
       notification.setTitle("Booking confirmed");
       notification.setMessage("Your booking has been confirmed. We look forward to seeing you!");
       notificationService.createNotification(saved.getUser().getId(), notification);
+
+      // ⬅ NEW: also notify every admin/manager/staff account of the confirmation
+      notifyStaff(
+          "Booking confirmed",
+          "Booking #" + saved.getId() + " for " + saved.getUser().getFirstName() + " "
+              + saved.getUser().getLastName() + " has been confirmed.");
     }
 
     return toResponse(saved);
@@ -357,6 +369,22 @@ public class ReservationServiceImpl implements ReservationService {
     }
 
     reservationRepository.deleteById(id);
+  }
+
+  // ⬅ NEW: shared helper — creates one Notification per ADMIN/MANAGER/STAFF user.
+  // Reuses NotificationService.createNotification(), so Telegram forwarding
+  // (wired in NotificationServiceImpl) applies to staff accounts automatically too.
+  private void notifyStaff(String title, String message) {
+    List<User> staffUsers = userRepository.findByRoleIn(
+        List.of(RoleEnum.ADMIN, RoleEnum.MANAGER, RoleEnum.STAFF));
+
+    for (User staff : staffUsers) {
+      NotificationRequestDTO adminNotif = new NotificationRequestDTO();
+      adminNotif.setType(NotificationTypeEnum.BOOKING_CONFIRMED);
+      adminNotif.setTitle(title);
+      adminNotif.setMessage(message);
+      notificationService.createNotification(staff.getId(), adminNotif);
+    }
   }
 
   private ReservationResponseDTO toResponse(Reservation r) {
