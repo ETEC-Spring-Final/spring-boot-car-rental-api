@@ -3,6 +3,7 @@ package com.example.spring_boot_project_api.service.impl;
 import java.math.BigDecimal;
 import java.util.List;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -88,7 +89,7 @@ public class RentalServiceImpl implements RentalService {
 
   @Override
   public List<RentalResponseDTO> getAllRentals() {
-    return rentalRepository.findAll().stream()
+    return rentalRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
         .map(this::toResponse)
         .toList();
   }

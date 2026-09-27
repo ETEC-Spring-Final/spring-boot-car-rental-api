@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -199,7 +200,7 @@ public class ReservationServiceImpl implements ReservationService {
 
   @Override
   public List<ReservationResponseDTO> getAllReservations() {
-    return reservationRepository.findAll().stream()
+    return reservationRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
         .map(r -> toResponse(r))
         .toList();
   }

@@ -2,6 +2,7 @@ package com.example.spring_boot_project_api.service.impl;
 
 import java.util.List;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.example.spring_boot_project_api.dto.request.notification.NotificationRequestDTO;
@@ -44,7 +45,7 @@ public class NotificationServiceImpl implements NotificationService {
 
   @Override
   public List<NotificationResponseDTO> getAllNotifications() {
-    return notificationRepository.findAll().stream()
+    return notificationRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
         .map(this::toResponse)
         .toList();
   }
