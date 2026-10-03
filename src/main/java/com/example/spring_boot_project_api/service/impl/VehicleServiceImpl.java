@@ -29,7 +29,7 @@ import com.example.spring_boot_project_api.specification.VehicleSpecification;
 import lombok.RequiredArgsConstructor;
 
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor 
 public class VehicleServiceImpl implements VehicleService {
   private final VehicleRepository vehicleRepository;
   private final BrandRepository brandRepository;

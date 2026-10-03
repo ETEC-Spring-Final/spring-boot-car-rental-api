@@ -2,6 +2,8 @@ package com.example.spring_boot_project_api.controller;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -37,8 +39,8 @@ public class BrandController {
   }
 
   @GetMapping
-  public ResponseEntity<List<BrandResponseDTO>> getAllBrands() {
-    return ResponseEntity.ok(brandService.getAllBrands());
+  public ResponseEntity<Page<BrandResponseDTO>> getAllBrands(Pageable pageable) {
+    return ResponseEntity.ok(brandService.getAllBrands(pageable));
   }
 
   @GetMapping("/{id}")

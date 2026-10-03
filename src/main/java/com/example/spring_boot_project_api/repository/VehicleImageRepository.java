@@ -12,6 +12,11 @@ public interface VehicleImageRepository extends JpaRepository<VehicleImage, Long
 
   List<VehicleImage> findByVehicleId(Long vehicleId);
 
-  @Query("SELECT vi FROM VehicleImage vi WHERE vi.vehicle.id = :vehicleId AND vi.attachment.isPrimary = true")
+  @Query("""
+    SELECT vi 
+    FROM VehicleImage vi 
+    WHERE vi.vehicle.id = :vehicleId 
+      AND vi.attachment.isPrimary = true
+    """)
   Optional<VehicleImage> findPrimaryByVehicleId(Long vehicleId);
 }
