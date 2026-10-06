@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.example.spring_boot_project_api.dto.request.vehicle.VehicleRequestDTO;
@@ -27,7 +29,7 @@ import com.example.spring_boot_project_api.specification.VehicleSpecification;
 import lombok.RequiredArgsConstructor;
 
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor 
 public class VehicleServiceImpl implements VehicleService {
   private final VehicleRepository vehicleRepository;
   private final BrandRepository brandRepository;
@@ -70,25 +72,57 @@ public class VehicleServiceImpl implements VehicleService {
     return toResponse(vehicle);
   }
 
+  // @Override
+  // public List<VehicleResponseDTO> getAllVehicles() {
+  // return vehicleRepository.findAll().stream()
+  // .map(this::toResponse)
+  // .toList();
+  // }
+
   @Override
-  public List<VehicleResponseDTO> getAllVehicles() {
-    return vehicleRepository.findAll().stream()
-        .map(this::toResponse)
-        .toList();
+  public Page<VehicleResponseDTO> getAllVehicles(Pageable pageable) {
+    return vehicleRepository.findAll(pageable).map(this::toResponse);
   }
 
   // FIX: replaces getAllVehiclesByBrand (was dead code — no controller route
   // ever called it). Now backs the filter bar + brand chips on the Explore
   // page: any param left null is simply skipped by VehicleSpecification.
-  @Override
-  public List<VehicleResponseDTO> searchVehicles(
-      Long brandId, CarTypeEnum type, TransmissionEnum transmission,
-      FuelTypeEnum fuelType, BigDecimal minPrice, BigDecimal maxPrice, Integer seats) {
 
-    var spec = VehicleSpecification.withFilters(brandId, type, transmission, fuelType, minPrice, maxPrice, seats);
-    return vehicleRepository.findAll(spec).stream()
-        .map(this::toResponse)
-        .toList();
+  // @Override
+  // public List<VehicleResponseDTO> searchVehicles(
+  // Long brandId, CarTypeEnum type, TransmissionEnum transmission,
+  // FuelTypeEnum fuelType, BigDecimal minPrice, BigDecimal maxPrice, Integer
+  // seats) {
+
+  // var spec = VehicleSpecification.withFilters(brandId, type, transmission,
+  // fuelType, minPrice, maxPrice, seats);
+  // return vehicleRepository.findAll(spec).stream()
+  // .map(this::toResponse)
+  // .toList();
+  // }
+
+  @Override
+  public Page<VehicleResponseDTO> searchVehicles(
+      Long brandId,
+      CarTypeEnum type,
+      TransmissionEnum transmission,
+      FuelTypeEnum fuelType,
+      BigDecimal minPrice,
+      BigDecimal maxPrice,
+      Integer seats,
+      Pageable pageable) {
+
+    var spec = VehicleSpecification.withFilters(
+        brandId,
+        type,
+        transmission,
+        fuelType,
+        minPrice,
+        maxPrice,
+        seats);
+
+    return vehicleRepository.findAll(spec, pageable)
+        .map(this::toResponse);
   }
 
   @Override
@@ -157,4 +191,5 @@ public class VehicleServiceImpl implements VehicleService {
         v.getPricePerDay(),
         v.getMileAge(), v.getDescription(), v.getStatus(), v.getCreatedAt(), v.getUpdatedAt());
   }
+
 }

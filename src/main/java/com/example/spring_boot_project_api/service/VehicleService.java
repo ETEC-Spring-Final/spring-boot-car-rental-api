@@ -3,6 +3,9 @@ package com.example.spring_boot_project_api.service;
 import java.math.BigDecimal;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.example.spring_boot_project_api.dto.request.vehicle.VehicleRequestDTO;
 import com.example.spring_boot_project_api.dto.response.reservation.BookedDateDTO;
 import com.example.spring_boot_project_api.dto.response.vehicle.VehicleResponseDTO;
@@ -15,13 +18,13 @@ public interface VehicleService {
 
   VehicleResponseDTO getVehicleById(Long id);
 
-  List<VehicleResponseDTO> getAllVehicles();
+  Page<VehicleResponseDTO> getAllVehicles(Pageable pageable);
 
   // FIX: replaces getAllVehiclesByBrand (was dead code — had no controller
   // endpoint). All params optional; pass null for whichever aren't filtered.
-  List<VehicleResponseDTO> searchVehicles(
+  Page<VehicleResponseDTO> searchVehicles(
       Long brandId, CarTypeEnum type, TransmissionEnum transmission,
-      FuelTypeEnum fuelType, BigDecimal minPrice, BigDecimal maxPrice, Integer seats);
+      FuelTypeEnum fuelType, BigDecimal minPrice, BigDecimal maxPrice, Integer seats, Pageable pageable);
 
   VehicleResponseDTO updateVehicle(Long id, VehicleRequestDTO dto);
 

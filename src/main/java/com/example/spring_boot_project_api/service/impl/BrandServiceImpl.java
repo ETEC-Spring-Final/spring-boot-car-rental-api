@@ -2,12 +2,15 @@ package com.example.spring_boot_project_api.service.impl;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.example.spring_boot_project_api.dto.request.brand.BrandRequestDTO;
 import com.example.spring_boot_project_api.dto.response.brand.BrandResponseDTO;
 import com.example.spring_boot_project_api.dto.response.cloudinary.CloudinaryUploadResponseDTO;
+import com.example.spring_boot_project_api.mapper.BrandMapper;
 import com.example.spring_boot_project_api.model.Brand;
 import com.example.spring_boot_project_api.repository.BrandRepository;
 import com.example.spring_boot_project_api.service.BrandService;
@@ -19,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class BrandServiceImpl implements BrandService {
   private final BrandRepository brandRepository;
+  private final BrandMapper brandMapper;
   private final CloudinaryUploadService cloudinaryUploadService;
 
   @Override
@@ -42,8 +46,10 @@ public class BrandServiceImpl implements BrandService {
   }
 
   @Override
-  public List<BrandResponseDTO> getAllBrands() {
-    return brandRepository.findAll().stream().map(this::toResponse).toList();
+  public Page<BrandResponseDTO> getAllBrands(Pageable pageable) {
+    // return
+    // brandRepository.findAll(pageable).stream().map(this::toResponse).toList();
+    return brandRepository.findAll(pageable).map(brandMapper::toResponseDTO);
   }
 
   @Override

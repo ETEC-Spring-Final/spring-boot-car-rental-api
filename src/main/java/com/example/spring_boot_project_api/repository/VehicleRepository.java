@@ -1,8 +1,9 @@
 package com.example.spring_boot_project_api.repository;
 
-import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -15,11 +16,11 @@ import com.example.spring_boot_project_api.model.Vehicle;
 // combination.
 public interface VehicleRepository extends JpaRepository<Vehicle, Long>,
     JpaSpecificationExecutor<Vehicle> {
-  List<Vehicle> findByStatus(StatusEnum status);
+  Page<Vehicle> findByStatus(StatusEnum status, Pageable pageable);
 
-  List<Vehicle> findByType(CarTypeEnum type);
+  Page<Vehicle> findByType(CarTypeEnum type, Pageable pageable);
 
-  List<Vehicle> findByBrandId(Long brandId);
+  Page<Vehicle> findByBrandId(Long brandId, Pageable pageable);
 
   Optional<Vehicle> findByLicensePlate(String licensePlate);
 }

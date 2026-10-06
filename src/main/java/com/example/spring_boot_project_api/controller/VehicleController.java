@@ -4,6 +4,9 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -43,17 +46,33 @@ public class VehicleController {
   }
 
   // FIX: now actually applies the filters the frontend (Explore page) sends.
-  // All params optional — calling GET /api/vehicles with none still returns everything.
+  // All params optional — calling GET /api/vehicles with none still returns
+  // everything.
+  // @GetMapping
+  // public List<VehicleResponseDTO> getAllVehicles(
+  // @RequestParam(required = false) Long brandId,
+  // @RequestParam(required = false) CarTypeEnum type,
+  // @RequestParam(required = false) TransmissionEnum transmission,
+  // @RequestParam(required = false) FuelTypeEnum fuelType,
+  // @RequestParam(required = false) BigDecimal minPrice,
+  // @RequestParam(required = false) BigDecimal maxPrice,
+  // @RequestParam(required = false) Integer seats) {
+  // return vehicleService.searchVehicles(brandId, type, transmission, fuelType,
+  // minPrice, maxPrice, seats);
+  // }
+
   @GetMapping
-  public List<VehicleResponseDTO> getAllVehicles(
+  public Page<VehicleResponseDTO> getAllVehicles(
       @RequestParam(required = false) Long brandId,
       @RequestParam(required = false) CarTypeEnum type,
       @RequestParam(required = false) TransmissionEnum transmission,
       @RequestParam(required = false) FuelTypeEnum fuelType,
       @RequestParam(required = false) BigDecimal minPrice,
       @RequestParam(required = false) BigDecimal maxPrice,
-      @RequestParam(required = false) Integer seats) {
-    return vehicleService.searchVehicles(brandId, type, transmission, fuelType, minPrice, maxPrice, seats);
+      @RequestParam(required = false) Integer seats,
+      @PageableDefault(size = 10) Pageable pageable) {
+    return vehicleService.searchVehicles(brandId, type, transmission, fuelType,
+        minPrice, maxPrice, seats, pageable);
   }
 
   @PreAuthorize("hasRole('ADMIN')")
