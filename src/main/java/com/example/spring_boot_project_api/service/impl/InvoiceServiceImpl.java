@@ -154,43 +154,132 @@ public class InvoiceServiceImpl implements InvoiceService {
 
   @Override
   @Transactional
-  public InvoiceResponseDTO confirmPayment(Long id, InvoicePaymentConfirmDTO dto) {
+  public InvoiceResponseDTO confirmPayment(
+      Long id,
+      InvoicePaymentConfirmDTO dto) {
+
+    // 1. Find invoice
     Invoice invoice = invoiceRepository.findById(id)
         .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
+    // 2. Get logged-in customer
     User currentUser = getCurrentUser();
-    boolean isOwner = invoice.getRental().getUser().getId().equals(currentUser.getId());
+
+    // 3. Check invoice ownership
+    boolean isOwner = invoice.getRental()
+        .getUser()
+        .getId()
+        .equals(currentUser.getId());
 
     if (!isOwner) {
-      throw new RuntimeException("You are not authorized to pay this invoice");
+      throw new RuntimeException(
+          "You are not authorized to pay this invoice");
     }
 
+    // 4. Prevent duplicate payment processing
     if (invoice.getStatus() == InvoiceStatusEnum.PAID) {
       return toResponse(invoice);
     }
+
+    // 5. Don't allow cancelled invoice
     if (invoice.getStatus() == InvoiceStatusEnum.CANCELLED) {
-      throw new RuntimeException("This invoice has been cancelled");
+      throw new RuntimeException(
+          "This invoice has been cancelled");
     }
 
-    com.example.spring_boot_project_api.dto.response.bakong.BakongResponse bakongResponse =
-        bakongService.checkTransactionByMD5(
-            new com.example.spring_boot_project_api.dto.request.bakong.CheckTransactionRequest(dto.md5()));
+    // 6. Check payment with Bakong
+    com.example.spring_boot_project_api.dto.response.bakong.BakongResponse bakongResponse = bakongService
+        .checkTransactionByMD5(
+            new com.example.spring_boot_project_api.dto.request.bakong.CheckTransactionRequest(
+                dto.md5()));
 
+    // 7. Bakong says payment is not successful
     if (!bakongResponse.isSuccess()) {
-      throw new RuntimeException("Payment has not been confirmed");
+      throw new RuntimeException(
+          "Payment has not been confirmed");
     }
 
+    // =====================================================
+    // PAYMENT SUCCESS
+    // =====================================================
+
+    // 8. Mark invoice as PAID
     invoice.setStatus(InvoiceStatusEnum.PAID);
+
+    // 9. Save payment time
+    invoice.setPaidAt(LocalDateTime.now());
+
+    // 10. Save invoice
     Invoice saved = invoiceRepository.save(invoice);
 
+    // =====================================================
+    // SEND PAYMENT SUCCESS NOTIFICATION
+    // =====================================================
+
     NotificationRequestDTO notification = new NotificationRequestDTO();
-    notification.setType(NotificationTypeEnum.PAYMENT_SUCCESS);
-    notification.setTitle("Payment successful");
-    notification.setMessage("Your payment for invoice " + saved.getInvoiceNumber() + " was received. Thank you!");
-    notificationService.createNotification(currentUser.getId(), notification);
+
+    notification.setType(
+        NotificationTypeEnum.PAYMENT_SUCCESS);
+
+    notification.setTitle(
+        "Payment successful 🎉");
+
+    notification.setMessage(
+        "Your payment for invoice "
+            + saved.getInvoiceNumber()
+            + " was received. Thank you!");
+
+    notificationService.createNotification(
+        currentUser.getId(),
+        notification);
 
     return toResponse(saved);
   }
+
+  // @Override
+  // @Transactional
+  // public InvoiceResponseDTO confirmPayment(Long id, InvoicePaymentConfirmDTO
+  // dto) {
+  // Invoice invoice = invoiceRepository.findById(id)
+  // .orElseThrow(() -> new RuntimeException("Invoice not found"));
+
+  // User currentUser = getCurrentUser();
+  // boolean isOwner =
+  // invoice.getRental().getUser().getId().equals(currentUser.getId());
+
+  // if (!isOwner) {
+  // throw new RuntimeException("You are not authorized to pay this invoice");
+  // }
+
+  // if (invoice.getStatus() == InvoiceStatusEnum.PAID) {
+  // return toResponse(invoice);
+  // }
+  // if (invoice.getStatus() == InvoiceStatusEnum.CANCELLED) {
+  // throw new RuntimeException("This invoice has been cancelled");
+  // }
+
+  // com.example.spring_boot_project_api.dto.response.bakong.BakongResponse
+  // bakongResponse =
+  // bakongService.checkTransactionByMD5(
+  // new
+  // com.example.spring_boot_project_api.dto.request.bakong.CheckTransactionRequest(dto.md5()));
+
+  // if (!bakongResponse.isSuccess()) {
+  // throw new RuntimeException("Payment has not been confirmed");
+  // }
+
+  // invoice.setStatus(InvoiceStatusEnum.PAID);
+  // Invoice saved = invoiceRepository.save(invoice);
+
+  // NotificationRequestDTO notification = new NotificationRequestDTO();
+  // notification.setType(NotificationTypeEnum.PAYMENT_SUCCESS);
+  // notification.setTitle("Payment successful");
+  // notification.setMessage("Your payment for invoice " +
+  // saved.getInvoiceNumber() + " was received. Thank you!");
+  // notificationService.createNotification(currentUser.getId(), notification);
+
+  // return toResponse(saved);
+  // }
 
   @Override
   @Transactional
@@ -248,7 +337,8 @@ public class InvoiceServiceImpl implements InvoiceService {
       NotificationRequestDTO notification = new NotificationRequestDTO();
       notification.setType(NotificationTypeEnum.PAYMENT_SUCCESS);
       notification.setTitle("Cash payment recorded");
-      notification.setMessage("Your cash payment for invoice " + saved.getInvoiceNumber() + " has been recorded. Thank you!");
+      notification
+          .setMessage("Your cash payment for invoice " + saved.getInvoiceNumber() + " has been recorded. Thank you!");
       notificationService.createNotification(customer.getId(), notification);
     }
 

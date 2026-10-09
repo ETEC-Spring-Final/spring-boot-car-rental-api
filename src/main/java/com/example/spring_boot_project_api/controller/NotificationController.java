@@ -3,6 +3,7 @@ package com.example.spring_boot_project_api.controller;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -12,10 +13,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.spring_boot_project_api.dto.request.notification.NotificationRequestDTO;
+import com.example.spring_boot_project_api.dto.request.notification.UserDeviceTokenRequestDTO;
 import com.example.spring_boot_project_api.dto.response.notification.NotificationResponseDTO;
+import com.example.spring_boot_project_api.enums.NotificationTypeEnum;
 import com.example.spring_boot_project_api.service.NotificationService;
 import com.example.spring_boot_project_api.service.impl.CustomUserDetails;
 
@@ -70,4 +74,32 @@ public class NotificationController {
   public List<NotificationResponseDTO> getAllNotifications() {
     return notificationService.getAllNotifications();
   }
+
+  @PostMapping("/device")
+  public ResponseEntity<Void> registerDevice(
+      @AuthenticationPrincipal CustomUserDetails userDetails,
+      @Valid @RequestBody UserDeviceTokenRequestDTO request) {
+
+    notificationService.registerDevice(
+        userDetails.getId(),
+        request.token(),
+        request.deviceType());
+
+    return ResponseEntity.ok().build();
+  }
+
+  // Test Firebase Push Notification
+  @PostMapping("/test")
+  public ResponseEntity<Void> testNotification(
+      @RequestParam Long userId) {
+
+    notificationService.sendNotification(
+        userId,
+        "Test Notification 🔔",
+        "Firebase notification is working!",
+        NotificationTypeEnum.PAYMENT_SUCCESS);
+
+    return ResponseEntity.ok().build();
+  }
+
 }

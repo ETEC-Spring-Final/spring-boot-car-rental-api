@@ -173,7 +173,7 @@ public class ReservationServiceImpl implements ReservationService {
       NotificationRequestDTO notification = new NotificationRequestDTO();
       notification.setType(NotificationTypeEnum.BOOKING_CONFIRMED);
       notification.setTitle("Booking created");
-      notification.setMessage("Your booking request has been received. Please complete your payment.");
+      notification.setMessage("Your booking request has been received.");
       notificationService.createNotification(currentUser.getId(), notification);
     }
 
